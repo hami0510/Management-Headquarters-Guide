@@ -1,5 +1,8 @@
 import streamlit as st
 from openai import OpenAI
+import math
+from datetime import date, timedelta
+import pandas as pd
 
 st.set_page_config(
     page_title="KCIM 출산·육아 응대 가이드",
@@ -18,204 +21,98 @@ st.markdown("""
   font-family: 'Pretendard', -apple-system, sans-serif !important;
   box-sizing: border-box;
 }
-
-.block-container {
-  padding: 0 !important;
-  max-width: 100% !important;
-}
-
+.block-container { padding: 0 !important; max-width: 100% !important; }
 .stApp { background: #f0f4f8; }
 
-/* ── 최상단 헤더 바 ── */
+/* ── 최상단 헤더 ── */
 .top-header {
   background: linear-gradient(135deg, #0f2942 0%, #1a4a6e 60%, #1e6091 100%);
-  padding: 0.9rem 2rem;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+  padding: 0.9rem 2rem; display: flex; align-items: center;
+  justify-content: space-between; box-shadow: 0 2px 12px rgba(0,0,0,0.2);
 }
-.top-header-title {
-  font-size: 1.25rem; font-weight: 800; color: #fff; letter-spacing: -0.3px;
-}
-.top-header-sub {
-  font-size: 0.78rem; color: rgba(255,255,255,0.7); margin-top: 2px;
-}
+.top-header-title { font-size: 1.25rem; font-weight: 800; color: #fff; letter-spacing: -0.3px; }
+.top-header-sub { font-size: 0.78rem; color: rgba(255,255,255,0.7); margin-top: 2px; }
 .badge-2025 {
   background: linear-gradient(135deg, #f093fb, #f5576c);
   color: white; padding: 3px 10px; border-radius: 20px;
-  font-size: 0.7rem; font-weight: 700; margin-left: 10px;
-  vertical-align: middle;
+  font-size: 0.7rem; font-weight: 700; margin-left: 10px; vertical-align: middle;
 }
 
-/* ── 스텝 프로그레스 바 ── */
+/* ── 스텝 프로그레스 ── */
 .stepper-wrap {
-  background: #fff;
-  border-bottom: 1px solid #e2e8f0;
-  padding: 0.9rem 2rem;
-  overflow-x: auto;
+  background: #fff; border-bottom: 1px solid #e2e8f0;
+  padding: 0.9rem 2rem; overflow-x: auto;
 }
-.stepper {
-  display: flex;
-  align-items: center;
-  gap: 0;
-  min-width: 600px;
-}
+.stepper { display: flex; align-items: center; gap: 0; min-width: 600px; }
 .step-node {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  flex: 1;
-  position: relative;
-  cursor: pointer;
+  display: flex; flex-direction: column; align-items: center;
+  flex: 1; position: relative; cursor: pointer;
 }
 .step-node::before {
-  content: '';
-  position: absolute;
-  top: 16px;
-  right: 50%;
-  width: 100%;
-  height: 2px;
-  background: #e2e8f0;
-  z-index: 0;
+  content: ''; position: absolute; top: 16px; right: 50%;
+  width: 100%; height: 2px; background: #e2e8f0; z-index: 0;
 }
 .step-node:first-child::before { display: none; }
 .step-node.done::before { background: #22c55e; }
 .step-node.active::before { background: #3b82f6; }
-
 .step-circle {
   width: 32px; height: 32px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  font-weight: 800; font-size: 0.8rem;
-  border: 2px solid #e2e8f0;
-  background: #f8fafc; color: #94a3b8;
-  position: relative; z-index: 1;
-  transition: all 0.2s;
+  font-weight: 800; font-size: 0.8rem; border: 2px solid #e2e8f0;
+  background: #f8fafc; color: #94a3b8; position: relative; z-index: 1; transition: all 0.2s;
 }
-.step-node.done .step-circle {
-  background: #22c55e; border-color: #22c55e; color: white;
-}
+.step-node.done .step-circle { background: #22c55e; border-color: #22c55e; color: white; }
 .step-node.active .step-circle {
   background: #3b82f6; border-color: #3b82f6; color: white;
   box-shadow: 0 0 0 4px rgba(59,130,246,0.2);
 }
-.step-label {
-  font-size: 0.68rem; font-weight: 600; color: #94a3b8;
-  margin-top: 5px; text-align: center; white-space: nowrap;
-}
+.step-label { font-size: 0.68rem; font-weight: 600; color: #94a3b8; margin-top: 5px; text-align: center; white-space: nowrap; }
 .step-node.active .step-label { color: #3b82f6; font-weight: 800; }
 .step-node.done .step-label { color: #22c55e; }
 
-/* ── 메인 3열 레이아웃 ── */
-.main-layout {
-  display: flex;
-  height: calc(100vh - 130px);
-  overflow: hidden;
-}
-
 /* ── 왼쪽 패널 ── */
-.left-panel {
-  width: 200px;
-  min-width: 200px;
-  background: #fff;
-  border-right: 1px solid #e2e8f0;
-  overflow-y: auto;
-  padding: 1rem 0.7rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-}
 .nav-section-title {
   font-size: 0.65rem; font-weight: 700; color: #94a3b8;
   letter-spacing: 0.8px; text-transform: uppercase;
-  padding: 0.3rem 0.5rem 0.2rem;
-  margin-top: 0.5rem;
+  padding: 0.3rem 0.5rem 0.2rem; margin-top: 0.5rem;
 }
-.nav-btn {
-  display: flex; align-items: center; gap: 8px;
-  padding: 0.5rem 0.6rem; border-radius: 8px;
-  cursor: pointer; transition: all 0.15s;
-  border: none; background: transparent; width: 100%;
-  text-align: left;
-}
-.nav-btn:hover { background: #f1f5f9; }
-.nav-btn.active { background: #eff6ff; }
-.nav-dot {
-  width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
-}
-.nav-text { font-size: 0.78rem; font-weight: 600; color: #475569; }
-.nav-btn.active .nav-text { color: #2563eb; font-weight: 700; }
-
 .law-item {
-  padding: 0.4rem 0.6rem;
-  border-radius: 6px;
-  background: #f8fafc;
-  border-left: 3px solid #e2e8f0;
-  margin-bottom: 4px;
+  padding: 0.4rem 0.6rem; border-radius: 6px; background: #f8fafc;
+  border-left: 3px solid #e2e8f0; margin-bottom: 4px;
 }
 .law-item-title { font-size: 0.7rem; font-weight: 700; color: #374151; }
 .law-item-desc { font-size: 0.65rem; color: #6b7280; margin-top: 1px; line-height: 1.4; }
-
 .kpi-card {
   background: linear-gradient(135deg, #f0f9ff, #e0f2fe);
-  border: 1px solid #bae6fd;
-  border-radius: 8px;
-  padding: 0.5rem 0.7rem;
-  margin-bottom: 4px;
-  text-align: center;
+  border: 1px solid #bae6fd; border-radius: 8px;
+  padding: 0.5rem 0.7rem; margin-bottom: 4px; text-align: center;
 }
 .kpi-value { font-size: 1.1rem; font-weight: 900; color: #0369a1; }
 .kpi-label { font-size: 0.62rem; font-weight: 600; color: #0369a1; opacity: 0.8; }
 
-/* ── 중앙 패널 ── */
-.center-panel {
-  flex: 1;
-  overflow-y: auto;
-  padding: 1.2rem 1.4rem;
-  background: #f0f4f8;
-}
-
 /* ── 스텝 헤더 카드 ── */
 .step-header-card {
-  border-radius: 14px;
-  padding: 1.2rem 1.5rem;
-  margin-bottom: 1rem;
-  color: white;
-  position: relative;
-  overflow: hidden;
+  border-radius: 14px; padding: 1.2rem 1.5rem; margin-bottom: 1rem;
+  color: white; position: relative; overflow: hidden;
 }
 .step-header-card::after {
-  content: attr(data-num);
-  position: absolute;
-  right: 1rem; top: 50%;
-  transform: translateY(-50%);
-  font-size: 5rem;
-  font-weight: 900;
-  opacity: 0.12;
-  line-height: 1;
+  content: attr(data-num); position: absolute; right: 1rem; top: 50%;
+  transform: translateY(-50%); font-size: 5rem; font-weight: 900; opacity: 0.12; line-height: 1;
 }
 .step-num-badge {
-  font-size: 0.72rem; font-weight: 700;
-  background: rgba(255,255,255,0.25); border-radius: 20px;
-  padding: 2px 10px; display: inline-block; margin-bottom: 5px;
+  font-size: 0.72rem; font-weight: 700; background: rgba(255,255,255,0.25);
+  border-radius: 20px; padding: 2px 10px; display: inline-block; margin-bottom: 5px;
 }
-.step-main-title {
-  font-size: 1.4rem; font-weight: 900; letter-spacing: -0.5px;
-}
-.step-meta {
-  display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap;
-}
+.step-main-title { font-size: 1.4rem; font-weight: 900; letter-spacing: -0.5px; }
+.step-meta { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
 .step-chip {
-  background: rgba(255,255,255,0.2);
-  border: 1px solid rgba(255,255,255,0.3);
-  border-radius: 20px; padding: 3px 10px;
-  font-size: 0.72rem; font-weight: 600; color: white;
+  background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3);
+  border-radius: 20px; padding: 3px 10px; font-size: 0.72rem; font-weight: 600; color: white;
 }
 
 /* ── 스크립트 박스 ── */
 .script-card {
-  background: white; border-radius: 12px;
-  border: 1px solid #e2e8f0;
+  background: white; border-radius: 12px; border: 1px solid #e2e8f0;
   padding: 1rem 1.2rem; margin-bottom: 0.8rem;
   box-shadow: 0 1px 6px rgba(0,0,0,0.04);
 }
@@ -224,79 +121,37 @@ st.markdown("""
   margin-bottom: 0.6rem; display: flex; align-items: center; gap: 6px;
 }
 .script-content {
-  background: #f0f9ff;
-  border-left: 4px solid #3b82f6;
-  border-radius: 0 8px 8px 0;
-  padding: 0.8rem 1rem;
-  font-size: 0.95rem; font-weight: 500;
-  color: #1e40af; line-height: 1.7;
-  font-style: italic;
-}
-
-/* ── 체크 + 서류 그리드 ── */
-.two-col-grid {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem;
-  margin-bottom: 0.8rem;
+  background: #f0f9ff; border-left: 4px solid #3b82f6;
+  border-radius: 0 8px 8px 0; padding: 0.8rem 1rem;
+  font-size: 0.95rem; font-weight: 500; color: #1e40af; line-height: 1.7; font-style: italic;
 }
 .info-card {
-  background: white; border-radius: 12px;
-  border: 1px solid #e2e8f0; padding: 0.9rem 1rem;
-  box-shadow: 0 1px 6px rgba(0,0,0,0.04);
+  background: white; border-radius: 12px; border: 1px solid #e2e8f0;
+  padding: 0.9rem 1rem; box-shadow: 0 1px 6px rgba(0,0,0,0.04);
 }
-.check-item {
-  display: flex; align-items: flex-start; gap: 8px;
-  padding: 5px 0; border-bottom: 1px solid #f1f5f9;
-  font-size: 0.82rem; color: #374151; line-height: 1.4;
-  cursor: pointer;
-}
-.check-item:last-child { border-bottom: none; }
-.check-box {
-  width: 16px; height: 16px; border-radius: 4px;
-  border: 2px solid #d1d5db; flex-shrink: 0;
-  margin-top: 1px; display: flex; align-items: center; justify-content: center;
-  font-size: 0.6rem; color: white;
-}
-.check-box.checked { background: #22c55e; border-color: #22c55e; }
-.check-text.checked { text-decoration: line-through; color: #9ca3af; }
-
 .form-chip2 {
   display: inline-flex; align-items: center; gap: 5px;
-  background: #f8fafc; border: 1px solid #e2e8f0;
-  border-radius: 6px; padding: 4px 10px;
-  font-size: 0.78rem; font-weight: 600; color: #334155;
+  background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;
+  padding: 4px 10px; font-size: 0.78rem; font-weight: 600; color: #334155;
   margin-bottom: 5px; width: 100%;
 }
 .warn-banner {
-  background: #fef2f2; border: 1px solid #fecaca;
-  border-radius: 8px; padding: 0.5rem 0.8rem;
-  font-size: 0.78rem; font-weight: 600; color: #dc2626;
-  margin-top: 6px; line-height: 1.5;
+  background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px;
+  padding: 0.5rem 0.8rem; font-size: 0.78rem; font-weight: 600;
+  color: #dc2626; margin-top: 6px; line-height: 1.5;
 }
-
-/* ── FAQ ── */
 .faq-card {
-  background: white; border-radius: 12px;
-  border: 1px solid #e2e8f0; padding: 0.9rem 1rem;
-  margin-bottom: 0.8rem;
-  box-shadow: 0 1px 6px rgba(0,0,0,0.04);
+  background: white; border-radius: 12px; border: 1px solid #e2e8f0;
+  padding: 0.9rem 1rem; margin-bottom: 0.8rem; box-shadow: 0 1px 6px rgba(0,0,0,0.04);
 }
 .faq-item { padding: 0.4rem 0; border-bottom: 1px solid #f1f5f9; }
 .faq-item:last-child { border-bottom: none; }
 .faq-q { font-size: 0.8rem; font-weight: 700; color: #1d4ed8; margin-bottom: 2px; }
 .faq-a { font-size: 0.78rem; color: #475569; line-height: 1.5; }
 
-/* ── 오른쪽 챗봇 패널 ── */
-.right-panel {
-  width: 320px;
-  min-width: 320px;
-  background: #fff;
-  border-left: 1px solid #e2e8f0;
-  display: flex;
-  flex-direction: column;
-}
+/* ── 챗봇 ── */
 .chat-header {
-  padding: 0.9rem 1rem;
-  border-bottom: 1px solid #e2e8f0;
+  padding: 0.9rem 1rem; border-bottom: 1px solid #e2e8f0;
   background: linear-gradient(135deg, #1e3a5f, #1a5276);
   display: flex; align-items: center; gap: 10px;
 }
@@ -306,45 +161,39 @@ st.markdown("""
   display: flex; align-items: center; justify-content: center;
   font-size: 1.1rem; flex-shrink: 0;
 }
-.chat-header-text .chat-name {
-  font-size: 0.9rem; font-weight: 800; color: white;
-}
-.chat-header-text .chat-desc {
-  font-size: 0.65rem; color: rgba(255,255,255,0.65);
-}
-.chat-messages {
-  flex: 1; overflow-y: auto; padding: 1rem;
-  background: #f8fafc; display: flex; flex-direction: column; gap: 0.6rem;
-}
-.msg-user {
-  display: flex; justify-content: flex-end;
-}
-.msg-user .bubble {
-  background: #3b82f6; color: white;
-  padding: 0.5rem 0.8rem; border-radius: 14px 14px 4px 14px;
-  font-size: 0.82rem; max-width: 85%; line-height: 1.5;
-}
-.msg-bot {
-  display: flex; gap: 6px; align-items: flex-start;
-}
-.msg-bot .bot-icon {
-  width: 26px; height: 26px; border-radius: 50%;
-  background: linear-gradient(135deg, #f093fb, #f5576c);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 0.7rem; flex-shrink: 0; margin-top: 2px;
-}
-.msg-bot .bubble {
-  background: white; border: 1px solid #e2e8f0;
-  padding: 0.5rem 0.8rem; border-radius: 4px 14px 14px 14px;
-  font-size: 0.82rem; max-width: 85%; line-height: 1.5; color: #1f2937;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
-}
+.chat-header-text .chat-name { font-size: 0.9rem; font-weight: 800; color: white; }
+.chat-header-text .chat-desc { font-size: 0.65rem; color: rgba(255,255,255,0.65); }
 .welcome-msg {
   background: linear-gradient(135deg, #eff6ff, #f0f9ff);
   border: 1px solid #bfdbfe; border-radius: 10px;
-  padding: 0.8rem; font-size: 0.8rem; color: #1e40af; line-height: 1.6;
-  text-align: center;
+  padding: 0.8rem; font-size: 0.8rem; color: #1e40af; line-height: 1.6; text-align: center;
 }
+
+/* ── 계산기 ── */
+.calc-header-card {
+  background: linear-gradient(135deg, #1e3a5f, #1a5276);
+  border-radius: 14px; padding: 1.2rem 1.5rem; margin-bottom: 1rem; color: white;
+}
+.period-bar {
+  border-radius: 8px; padding: 0.65rem 1rem; margin-bottom: 6px;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.period-ok { background: #dcfce7; border: 1.5px solid #86efac; }
+.period-na { background: #f1f5f9; border: 1.5px solid #cbd5e1; }
+.period-label { font-size: 0.82rem; font-weight: 700; }
+.period-date { font-size: 0.76rem; color: #475569; margin-top: 1px; }
+.period-days { font-size: 1rem; font-weight: 800; }
+.calc-note-box {
+  background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 10px;
+  padding: 0.75rem 1rem; margin-top: 0.8rem;
+  font-size: 0.8rem; color: #0369a1; line-height: 1.8;
+}
+.result-metric {
+  background: white; border: 1px solid #e2e8f0; border-radius: 10px;
+  padding: 0.8rem; text-align: center; box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+}
+.result-metric-val { font-size: 1.3rem; font-weight: 900; color: #0f172a; }
+.result-metric-label { font-size: 0.68rem; font-weight: 600; color: #64748b; margin-top: 2px; }
 
 /* ── Streamlit 요소 커스텀 ── */
 div[data-testid="stChatInput"] {
@@ -359,30 +208,17 @@ div[data-testid="stChatInput"] > div {
   background: white !important;
   box-shadow: 0 0 0 4px rgba(59,130,246,0.08) !important;
 }
-div[data-testid="stChatInput"] textarea {
-  color: #1f2937 !important;
-  font-size: 0.88rem !important;
-}
-div[data-testid="stChatInput"] textarea::placeholder {
-  color: #94a3b8 !important;
-  font-size: 0.85rem !important;
-}
+div[data-testid="stChatInput"] textarea { color: #1f2937 !important; font-size: 0.88rem !important; }
+div[data-testid="stChatInput"] textarea::placeholder { color: #94a3b8 !important; font-size: 0.85rem !important; }
 div[data-testid="stChatInput"] button {
   background: linear-gradient(135deg, #3b82f6, #2563eb) !important;
-  border-radius: 8px !important;
-  color: white !important;
+  border-radius: 8px !important; color: white !important;
 }
 section[data-testid="stSidebar"] { display: none !important; }
 header[data-testid="stHeader"] { display: none !important; }
 div[data-testid="stToolbar"] { display: none !important; }
 .stChatMessage { background: transparent !important; }
-
-/* 버튼 초기화 */
-.stButton button {
-  border-radius: 8px !important;
-  font-weight: 700 !important;
-  transition: all 0.15s !important;
-}
+.stButton button { border-radius: 8px !important; font-weight: 700 !important; transition: all 0.15s !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -527,6 +363,8 @@ STEPS = [
 # ──────────────────────────────────────────
 if "active_step" not in st.session_state:
     st.session_state.active_step = 0
+if "mode" not in st.session_state:
+    st.session_state.mode = "steps"
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "checks" not in st.session_state:
@@ -536,10 +374,12 @@ if "completed_steps" not in st.session_state:
 
 active_idx = st.session_state.active_step
 step = STEPS[active_idx]
+is_calc = st.session_state.mode == "calc"
 
 # ──────────────────────────────────────────
 # 상단 헤더
 # ──────────────────────────────────────────
+right_label = "📊 계산기 도구" if is_calc else f"현재 단계: <strong style='color:white;'>STEP {step['id']}. {step['short']}</strong>"
 st.markdown(f"""
 <div class="top-header">
   <div>
@@ -549,41 +389,41 @@ st.markdown(f"""
     <div class="top-header-sub">경영관리본부 담당자를 위한 단계별 업무 대응 워크스테이션</div>
   </div>
   <div style="color:rgba(255,255,255,0.6); font-size:0.75rem; text-align:right;">
-    현재 단계: <strong style="color:white;">STEP {step['id']}. {step['short']}</strong>
+    {right_label}
   </div>
 </div>
 """, unsafe_allow_html=True)
 
 # ──────────────────────────────────────────
-# 상단 스텝 프로그레스 스테퍼
+# 스텝 프로그레스 (계산기 모드에서는 숨김)
 # ──────────────────────────────────────────
-stepper_html = '<div class="stepper-wrap"><div class="stepper">'
-for i, s in enumerate(STEPS):
-    cls = "active" if i == active_idx else ("done" if i in st.session_state.completed_steps else "")
-    icon = "✓" if i in st.session_state.completed_steps else str(s["id"])
-    stepper_html += f"""
-    <div class="step-node {cls}">
-      <div class="step-circle">{icon}</div>
-      <div class="step-label">{s['short']}</div>
-    </div>"""
-stepper_html += '</div></div>'
-st.markdown(stepper_html, unsafe_allow_html=True)
+if not is_calc:
+    stepper_html = '<div class="stepper-wrap"><div class="stepper">'
+    for i, s in enumerate(STEPS):
+        cls = "active" if i == active_idx else ("done" if i in st.session_state.completed_steps else "")
+        icon = "✓" if i in st.session_state.completed_steps else str(s["id"])
+        stepper_html += f"""
+        <div class="step-node {cls}">
+          <div class="step-circle">{icon}</div>
+          <div class="step-label">{s['short']}</div>
+        </div>"""
+    stepper_html += '</div></div>'
+    st.markdown(stepper_html, unsafe_allow_html=True)
 
 # ──────────────────────────────────────────
 # 3열 메인 레이아웃
 # ──────────────────────────────────────────
 col_left, col_center, col_right = st.columns([1, 3.2, 1.6], gap="small")
 
-# ── 왼쪽: 내비게이션 + 법령 + KPI ──
+# ── 왼쪽 패널 ──
 with col_left:
     st.markdown('<div class="nav-section-title">📍 단계 이동</div>', unsafe_allow_html=True)
     for i, s in enumerate(STEPS):
-        is_active = i == active_idx
+        is_active = (i == active_idx) and not is_calc
         is_done = i in st.session_state.completed_steps
         check_count = sum(st.session_state.checks[i])
         total_count = len(s["check"])
         progress_text = f" ({check_count}/{total_count})" if check_count > 0 else ""
-
         if st.button(
             f"{'✓ ' if is_done else ''}{s['id']}. {s['short']}{progress_text}",
             key=f"nav_{i}",
@@ -591,117 +431,414 @@ with col_left:
             type="primary" if is_active else "secondary",
         ):
             st.session_state.active_step = i
+            st.session_state.mode = "steps"
             st.rerun()
 
-    st.markdown('<div class="nav-section-title" style="margin-top:1rem;">⚖️ 관련 법령</div>', unsafe_allow_html=True)
-    for law in step["laws"]:
-        st.markdown(f"""
-        <div class="law-item">
-          <div class="law-item-title">{law['name']}</div>
-          <div class="law-item-desc">{law['desc']}</div>
-        </div>""", unsafe_allow_html=True)
+    # 계산기 버튼
+    st.markdown('<div class="nav-section-title" style="margin-top:1rem;">🧮 계산 도구</div>', unsafe_allow_html=True)
+    if st.button(
+        "📊 계산기" + (" ✓" if is_calc else ""),
+        key="btn_calc",
+        use_container_width=True,
+        type="primary" if is_calc else "secondary",
+    ):
+        st.session_state.mode = "steps" if is_calc else "calc"
+        st.rerun()
 
-    st.markdown('<div class="nav-section-title" style="margin-top:1rem;">🔢 핵심 수치</div>', unsafe_allow_html=True)
-    for kpi in step["kpi"]:
-        st.markdown(f"""
-        <div class="kpi-card">
-          <div class="kpi-value">{kpi['val']}</div>
-          <div class="kpi-label">{kpi['label']}</div>
-        </div>""", unsafe_allow_html=True)
+    # 법령 & KPI (단계 모드에서만)
+    if not is_calc:
+        st.markdown('<div class="nav-section-title" style="margin-top:1rem;">⚖️ 관련 법령</div>', unsafe_allow_html=True)
+        for law in step["laws"]:
+            st.markdown(f"""
+            <div class="law-item">
+              <div class="law-item-title">{law['name']}</div>
+              <div class="law-item-desc">{law['desc']}</div>
+            </div>""", unsafe_allow_html=True)
 
-    st.markdown("""
-    <div class="kpi-card">
-      <div class="kpi-value">90일</div>
-      <div class="kpi-label">출산휴가</div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-value">20일</div>
-      <div class="kpi-label">배우자휴가</div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-value">2시간</div>
-      <div class="kpi-label">임신기단축/일</div>
-    </div>""", unsafe_allow_html=True)
+        st.markdown('<div class="nav-section-title" style="margin-top:1rem;">🔢 핵심 수치</div>', unsafe_allow_html=True)
+        for kpi in step["kpi"]:
+            st.markdown(f"""
+            <div class="kpi-card">
+              <div class="kpi-value">{kpi['val']}</div>
+              <div class="kpi-label">{kpi['label']}</div>
+            </div>""", unsafe_allow_html=True)
+        st.markdown("""
+        <div class="kpi-card"><div class="kpi-value">90일</div><div class="kpi-label">출산휴가</div></div>
+        <div class="kpi-card"><div class="kpi-value">20일</div><div class="kpi-label">배우자휴가</div></div>
+        <div class="kpi-card"><div class="kpi-value">2시간</div><div class="kpi-label">임신기단축/일</div></div>
+        """, unsafe_allow_html=True)
 
-# ── 중앙: 스텝 콘텐츠 ──
+# ── 중앙 패널 ──
 with col_center:
-    st.markdown(f"""
-    <div class="step-header-card" data-num="{step['id']}" style="background:{step['grad']};">
-      <div class="step-num-badge">STEP {step['id']} / 7</div>
-      <div class="step-main-title">{step['title']}</div>
-      <div class="step-meta">
-        <span class="step-chip">👤 대상: {step['target']}</span>
-        <span class="step-chip">➡️ 다음: {step['next']}</span>
-      </div>
-    </div>""", unsafe_allow_html=True)
 
-    st.markdown(f"""
-    <div class="script-card">
-      <div class="card-title">💬 담당자 안내 핵심 스크립트</div>
-      <div class="script-content">{step['guide']}</div>
-    </div>""", unsafe_allow_html=True)
+    # ════════════════════════════════
+    # 계산기 모드
+    # ════════════════════════════════
+    if is_calc:
+        st.markdown("""
+        <div class="calc-header-card">
+          <div style="font-size:0.72rem;font-weight:700;background:rgba(255,255,255,0.2);
+               border-radius:20px;padding:2px 10px;display:inline-block;margin-bottom:6px;">KCIM 계산 도구</div>
+          <div style="font-size:1.4rem;font-weight:900;">📊 기간 계산기</div>
+          <div style="font-size:0.8rem;opacity:0.75;margin-top:4px;">
+            출산·육아 관련 법정 기간 및 연차를 자동으로 계산합니다
+          </div>
+        </div>""", unsafe_allow_html=True)
 
-    col_copy, col_done = st.columns([2, 1])
-    with col_copy:
-        script_text = step["guide"].strip('"').strip('\u201c').strip('\u201d')
-        st.code(script_text, language=None)
-    with col_done:
-        if st.button("✅ 이 단계 완료", key=f"done_{active_idx}", use_container_width=True):
-            st.session_state.completed_steps.add(active_idx)
-            if active_idx < len(STEPS) - 1:
-                st.session_state.active_step = active_idx + 1
-            st.rerun()
+        tab1, tab2, tab3 = st.tabs(["📐 임신기 단축 기간", "📅 출산·육아 일정", "📉 무급휴가 연차"])
 
-    c1, c2 = st.columns(2)
+        # ── Tab 1: 임신기 단축 대상기간 ──
+        with tab1:
+            st.markdown("#### 임신기 근로시간 단축 대상기간 계산기")
+            st.caption("출산예정일을 입력하면 근로기준법 제74조의2에 따른 단축 가능 기간을 자동으로 계산합니다.")
+            st.markdown("")
 
-    with c1:
-        check_count = sum(st.session_state.checks[active_idx])
-        total_count = len(step["check"])
-        pct = int(check_count / total_count * 100)
+            col_in, col_hint = st.columns([1, 1])
+            with col_in:
+                due = st.date_input(
+                    "출산예정일",
+                    value=date.today() + timedelta(days=180),
+                    min_value=date.today() - timedelta(days=30),
+                    max_value=date.today() + timedelta(days=400),
+                    key="calc_due",
+                )
+            with col_hint:
+                st.markdown("""
+                <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;
+                     padding:0.7rem;font-size:0.78rem;color:#92400e;margin-top:1.7rem;">
+                  💡 병원 분만예정일 확인서의 날짜를 입력하세요
+                </div>""", unsafe_allow_html=True)
+
+            if st.button("🔍 단축 기간 계산", key="calc_btn1", type="primary"):
+                # 마지막생리시작일 = 출산예정일 - 279일 (40주 = 280일, 1일차 포함)
+                lmp = due - timedelta(days=279)
+                week12_end = lmp + timedelta(days=83)    # 84일째 (12주×7일)
+                week32_start = lmp + timedelta(days=217)  # 218일째 (31주×7일 + 1일)
+
+                days_early = (week12_end - lmp).days + 1
+                days_mid = (week32_start - week12_end).days - 1
+                days_late = (due - week32_start).days + 1
+                total_ok = days_early + days_late
+
+                st.markdown(f"""
+                <div style="margin-top:1rem;">
+                  <div class="period-bar period-ok">
+                    <div>
+                      <div class="period-label" style="color:#16a34a;">✅ 임신 12주 이내 (단축 가능)</div>
+                      <div class="period-date">{lmp.strftime('%Y년 %m월 %d일')} ~ {week12_end.strftime('%Y년 %m월 %d일')}</div>
+                    </div>
+                    <div class="period-days" style="color:#16a34a;">{days_early}일</div>
+                  </div>
+                  <div class="period-bar period-na">
+                    <div>
+                      <div class="period-label" style="color:#94a3b8;">⏸ 13주 ~ 31주 (단축 불가)</div>
+                      <div class="period-date">{(week12_end + timedelta(1)).strftime('%Y년 %m월 %d일')} ~ {(week32_start - timedelta(1)).strftime('%Y년 %m월 %d일')}</div>
+                    </div>
+                    <div class="period-days" style="color:#94a3b8;">{days_mid}일</div>
+                  </div>
+                  <div class="period-bar period-ok">
+                    <div>
+                      <div class="period-label" style="color:#16a34a;">✅ 임신 32주 이후 (단축 가능)</div>
+                      <div class="period-date">{week32_start.strftime('%Y년 %m월 %d일')} ~ {due.strftime('%Y년 %m월 %d일')}</div>
+                    </div>
+                    <div class="period-days" style="color:#16a34a;">{days_late}일</div>
+                  </div>
+                </div>
+                <div class="calc-note-box">
+                  <strong>📌 요약</strong><br>
+                  마지막 생리시작일(추정): <strong>{lmp.strftime('%Y.%m.%d')}</strong> &nbsp;|&nbsp;
+                  단축 가능 총 기간: <strong>{total_ok}일</strong><br>
+                  ※ 고위험 임산부(유산·조산 위험)는 전 임신 기간 단축 신청 가능 (의사 소견서 필요)
+                </div>
+                """, unsafe_allow_html=True)
+
+        # ── Tab 2: 출산·육아 일정 계산기 ──
+        with tab2:
+            st.markdown("#### 출산·육아휴직 일정 계산기")
+            st.caption("각 휴가 항목의 기간을 입력하면 합산 일수, 잔여 육아휴직을 자동으로 계산합니다.")
+
+            emp_name = st.text_input("직원명", placeholder="예: 홍길동 책임", key="calc_emp")
+
+            today = date.today()
+            df_default = pd.DataFrame({
+                "구분": ["연차", "출산휴가", "육아휴직"],
+                "시작일": [today, today + timedelta(14), today + timedelta(104)],
+                "종료일": [today + timedelta(13), today + timedelta(103), today + timedelta(468)],
+                "주말_제외일수": [4, 0, 0],
+            })
+
+            st.markdown("**기간 입력** (행 추가: + 버튼, 삭제: 행 선택 후 Delete)")
+            edited_df = st.data_editor(
+                df_default,
+                column_config={
+                    "구분": st.column_config.SelectboxColumn(
+                        "구분",
+                        options=["연차", "출산휴가", "육아휴직", "산전육아휴직", "배우자출산휴가"],
+                        required=True,
+                        width="medium",
+                    ),
+                    "시작일": st.column_config.DateColumn("시작일", required=True),
+                    "종료일": st.column_config.DateColumn("종료일", required=True),
+                    "주말_제외일수": st.column_config.NumberColumn(
+                        "주말 제외 (일)", min_value=0, max_value=100, step=1, width="small"
+                    ),
+                },
+                num_rows="dynamic",
+                use_container_width=True,
+                key="calc_schedule_df",
+            )
+
+            if st.button("🔍 일정 계산", key="calc_btn2", type="primary"):
+                rows_ok = []
+                for _, row in edited_df.iterrows():
+                    s_date = row["시작일"]
+                    e_date = row["종료일"]
+                    if s_date is None or e_date is None:
+                        continue
+                    if isinstance(s_date, str):
+                        s_date = pd.to_datetime(s_date).date()
+                    if isinstance(e_date, str):
+                        e_date = pd.to_datetime(e_date).date()
+                    if hasattr(s_date, "date"):
+                        s_date = s_date.date()
+                    if hasattr(e_date, "date"):
+                        e_date = e_date.date()
+                    total_days = (e_date - s_date).days + 1
+                    excl = int(row["주말_제외일수"] or 0)
+                    net = total_days - excl
+                    rows_ok.append({
+                        "구분": row["구분"],
+                        "시작일": s_date.strftime("%Y.%m.%d"),
+                        "종료일": e_date.strftime("%Y.%m.%d"),
+                        "총 일수": total_days,
+                        "주말 제외": excl,
+                        "소계": net,
+                    })
+
+                if rows_ok:
+                    res_df = pd.DataFrame(rows_ok)
+                    st.dataframe(res_df, use_container_width=True, hide_index=True)
+
+                    annual_total = res_df[res_df["구분"] == "연차"]["소계"].sum()
+                    maternity_total = res_df[res_df["구분"] == "출산휴가"]["소계"].sum()
+                    parental_total = res_df[res_df["구분"].isin(["육아휴직", "산전육아휴직"])]["소계"].sum()
+                    remaining_parental = max(0, 365 - int(parental_total))
+
+                    st.markdown("**📊 요약**")
+                    c1, c2, c3, c4 = st.columns(4)
+                    with c1:
+                        st.markdown(f"""<div class="result-metric">
+                          <div class="result-metric-val">{int(annual_total)}일</div>
+                          <div class="result-metric-label">연차 합계</div>
+                        </div>""", unsafe_allow_html=True)
+                    with c2:
+                        st.markdown(f"""<div class="result-metric">
+                          <div class="result-metric-val">{int(maternity_total)}일</div>
+                          <div class="result-metric-label">출산휴가</div>
+                        </div>""", unsafe_allow_html=True)
+                    with c3:
+                        st.markdown(f"""<div class="result-metric">
+                          <div class="result-metric-val">{int(parental_total)}일</div>
+                          <div class="result-metric-label">육아휴직 사용</div>
+                        </div>""", unsafe_allow_html=True)
+                    with c4:
+                        color = "#16a34a" if remaining_parental > 0 else "#dc2626"
+                        st.markdown(f"""<div class="result-metric" style="border-color:{color};">
+                          <div class="result-metric-val" style="color:{color};">{remaining_parental}일</div>
+                          <div class="result-metric-label">잔여 육아휴직</div>
+                        </div>""", unsafe_allow_html=True)
+
+                    name_label = emp_name if emp_name else "해당 직원"
+                    st.markdown(f"""
+                    <div class="calc-note-box" style="margin-top:0.8rem;">
+                      <strong>📌 {name_label} 요약</strong><br>
+                      연차 {int(annual_total)}일 + 출산휴가 {int(maternity_total)}일 + 육아휴직 {int(parental_total)}일 사용<br>
+                      잔여 육아휴직: <strong>{remaining_parental}일</strong> (최대 365일 기준 / 2025년 개정 기준 최대 548일)
+                    </div>
+                    """, unsafe_allow_html=True)
+                else:
+                    st.warning("유효한 기간 데이터가 없습니다. 시작일·종료일을 확인해주세요.")
+
+        # ── Tab 3: 무급휴가 연차 삭감 계산기 ──
+        with tab3:
+            st.markdown("#### 무급휴가 연차삭감 계산기")
+            st.caption("연간 80% 미만 근무 시 연차가 삭감됩니다 (근로기준법 제60조 제2항). 무급휴가 기간을 입력하여 확인하세요.")
+
+            col_a, col_b, col_c = st.columns(3)
+            with col_a:
+                annual_cnt = st.number_input("발생 연차 (일)", min_value=1, max_value=25, value=15, key="calc_annual_cnt")
+            with col_b:
+                base_days = st.number_input("연도 기준일수", min_value=365, max_value=366, value=365, key="calc_base_days",
+                                             help="윤년은 366 입력")
+            with col_c:
+                st.markdown("")
+                st.markdown("""<div style="background:#fef9c3;border:1px solid #fde047;border-radius:8px;
+                     padding:0.5rem;font-size:0.75rem;color:#713f12;margin-top:0.5rem;">
+                  ⚠️ 80% 기준: 73일 초과 무급 시 삭감
+                </div>""", unsafe_allow_html=True)
+
+            st.markdown("**무급휴가 기간 입력** (행 추가 가능)")
+            df_leave_default = pd.DataFrame({
+                "무급휴가 시작일": [date.today()],
+                "무급휴가 종료일": [date.today() + timedelta(days=30)],
+            })
+            edited_leave = st.data_editor(
+                df_leave_default,
+                column_config={
+                    "무급휴가 시작일": st.column_config.DateColumn("시작일", required=True),
+                    "무급휴가 종료일": st.column_config.DateColumn("종료일", required=True),
+                },
+                num_rows="dynamic",
+                use_container_width=True,
+                key="calc_leave_df",
+            )
+
+            if st.button("🔍 연차삭감 계산", key="calc_btn3", type="primary"):
+                total_leave = 0
+                leave_rows = []
+                for _, row in edited_leave.iterrows():
+                    s = row["무급휴가 시작일"]
+                    e = row["무급휴가 종료일"]
+                    if s is None or e is None:
+                        continue
+                    if hasattr(s, "date"):
+                        s = s.date()
+                    if hasattr(e, "date"):
+                        e = e.date()
+                    days = (e - s).days + 1
+                    total_leave += days
+                    leave_rows.append({"시작일": s.strftime("%Y.%m.%d"), "종료일": e.strftime("%Y.%m.%d"), "일수": days})
+
+                if leave_rows:
+                    st.dataframe(pd.DataFrame(leave_rows), use_container_width=True, hide_index=True)
+
+                work_ratio = (base_days - total_leave) / base_days
+                # CEILING to 0.5 단위 (엑셀 CEILING 함수 동일)
+                adjusted = math.ceil(annual_cnt * work_ratio * 2) / 2
+                adjusted = max(0, adjusted)
+                deducted = annual_cnt - adjusted
+                threshold_days = base_days * 0.2  # 20% = 73일
+
+                c1, c2, c3, c4 = st.columns(4)
+                with c1:
+                    st.markdown(f"""<div class="result-metric">
+                      <div class="result-metric-val">{total_leave}일</div>
+                      <div class="result-metric-label">무급 총 일수</div>
+                    </div>""", unsafe_allow_html=True)
+                with c2:
+                    ratio_color = "#16a34a" if work_ratio >= 0.8 else "#dc2626"
+                    st.markdown(f"""<div class="result-metric" style="border-color:{ratio_color};">
+                      <div class="result-metric-val" style="color:{ratio_color};">{work_ratio*100:.1f}%</div>
+                      <div class="result-metric-label">근무 비율</div>
+                    </div>""", unsafe_allow_html=True)
+                with c3:
+                    st.markdown(f"""<div class="result-metric">
+                      <div class="result-metric-val">{adjusted}일</div>
+                      <div class="result-metric-label">조정 후 연차</div>
+                    </div>""", unsafe_allow_html=True)
+                with c4:
+                    ded_color = "#dc2626" if deducted > 0 else "#16a34a"
+                    st.markdown(f"""<div class="result-metric" style="border-color:{ded_color};">
+                      <div class="result-metric-val" style="color:{ded_color};">-{deducted}일</div>
+                      <div class="result-metric-label">차감 연차</div>
+                    </div>""", unsafe_allow_html=True)
+
+                if work_ratio >= 0.8:
+                    st.success(f"✅ 근무비율 {work_ratio*100:.1f}% ≥ 80% → 연차 삭감 없음 (발생 연차 {annual_cnt}일 전액 지급)")
+                else:
+                    st.warning(
+                        f"⚠️ 근무비율 {work_ratio*100:.1f}% < 80% → 연차 {deducted}일 삭감 "
+                        f"(원래 {annual_cnt}일 → 조정 후 {adjusted}일)\n"
+                        f"무급 {total_leave}일 > 기준 {int(threshold_days)}일 초과"
+                    )
+
+                st.markdown(f"""
+                <div class="calc-note-box">
+                  <strong>📌 계산 기준</strong><br>
+                  근무비율 = ({base_days}일 - {total_leave}일) ÷ {base_days}일 = {work_ratio*100:.2f}%<br>
+                  조정연차 = {annual_cnt}일 × {work_ratio*100:.2f}% = {annual_cnt * work_ratio:.2f}일 → 0.5 단위 올림 → <strong>{adjusted}일</strong><br>
+                  ※ 육아휴직 기간은 무급휴가 산정에서 제외됩니다 (근로기준법 제60조 제6항)
+                </div>""", unsafe_allow_html=True)
+
+    # ════════════════════════════════
+    # 단계 가이드 모드
+    # ════════════════════════════════
+    else:
         st.markdown(f"""
-        <div class="info-card">
-          <div class="card-title">
-            ✅ 관리자 필수 체크
-            <span style="margin-left:auto; font-size:0.7rem; color:#6b7280; font-weight:600;">{check_count}/{total_count} 완료</span>
+        <div class="step-header-card" data-num="{step['id']}" style="background:{step['grad']};">
+          <div class="step-num-badge">STEP {step['id']} / 7</div>
+          <div class="step-main-title">{step['title']}</div>
+          <div class="step-meta">
+            <span class="step-chip">👤 대상: {step['target']}</span>
+            <span class="step-chip">➡️ 다음: {step['next']}</span>
+          </div>
+        </div>""", unsafe_allow_html=True)
+
+        st.markdown(f"""
+        <div class="script-card">
+          <div class="card-title">💬 담당자 안내 핵심 스크립트</div>
+          <div class="script-content">{step['guide']}</div>
+        </div>""", unsafe_allow_html=True)
+
+        col_copy, col_done = st.columns([2, 1])
+        with col_copy:
+            script_text = step["guide"].strip('"').strip('“').strip('”')
+            st.code(script_text, language=None)
+        with col_done:
+            if st.button("✅ 이 단계 완료", key=f"done_{active_idx}", use_container_width=True):
+                st.session_state.completed_steps.add(active_idx)
+                if active_idx < len(STEPS) - 1:
+                    st.session_state.active_step = active_idx + 1
+                st.rerun()
+
+        c1, c2 = st.columns(2)
+        with c1:
+            check_count = sum(st.session_state.checks[active_idx])
+            total_count = len(step["check"])
+            pct = int(check_count / total_count * 100)
+            st.markdown(f"""
+            <div class="info-card">
+              <div class="card-title">
+                ✅ 관리자 필수 체크
+                <span style="margin-left:auto;font-size:0.7rem;color:#6b7280;font-weight:600;">{check_count}/{total_count} 완료</span>
+              </div>""", unsafe_allow_html=True)
+            for ci, check_text in enumerate(step["check"]):
+                checked = st.session_state.checks[active_idx][ci]
+                if st.checkbox(check_text, value=checked, key=f"chk_{active_idx}_{ci}"):
+                    st.session_state.checks[active_idx][ci] = True
+                else:
+                    st.session_state.checks[active_idx][ci] = False
+            st.progress(pct / 100)
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        with c2:
+            st.markdown('<div class="info-card"><div class="card-title">🧾 필요 서류 및 주의사항</div>', unsafe_allow_html=True)
+            for f in step["forms"]:
+                st.markdown(f'<div class="form-chip2">📄 {f}</div>', unsafe_allow_html=True)
+            for w in step["warn"]:
+                st.markdown(f'<div class="warn-banner">⚠️ {w}</div>', unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        st.markdown(f"""
+        <div class="faq-card">
+          <div class="card-title">💡 자주 묻는 질문 (FAQ)</div>""", unsafe_allow_html=True)
+        for faq in step["faq"]:
+            st.markdown(f"""
+          <div class="faq-item">
+            <div class="faq-q">Q. {faq['q']}</div>
+            <div class="faq-a">A. {faq['a']}</div>
           </div>""", unsafe_allow_html=True)
-
-        for ci, check_text in enumerate(step["check"]):
-            checked = st.session_state.checks[active_idx][ci]
-            if st.checkbox(check_text, value=checked, key=f"chk_{active_idx}_{ci}"):
-                st.session_state.checks[active_idx][ci] = True
-            else:
-                st.session_state.checks[active_idx][ci] = False
-
-        st.progress(pct / 100)
         st.markdown("</div>", unsafe_allow_html=True)
-
-    with c2:
-        st.markdown('<div class="info-card"><div class="card-title">🧾 필요 서류 및 주의사항</div>', unsafe_allow_html=True)
-        for f in step["forms"]:
-            st.markdown(f'<div class="form-chip2">📄 {f}</div>', unsafe_allow_html=True)
-        for w in step["warn"]:
-            st.markdown(f'<div class="warn-banner">⚠️ {w}</div>', unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
-
-    st.markdown(f"""
-    <div class="faq-card">
-      <div class="card-title">💡 자주 묻는 질문 (FAQ)</div>""", unsafe_allow_html=True)
-    for faq in step["faq"]:
-        st.markdown(f"""
-      <div class="faq-item">
-        <div class="faq-q">Q. {faq['q']}</div>
-        <div class="faq-a">A. {faq['a']}</div>
-      </div>""", unsafe_allow_html=True)
-    st.markdown("</div>", unsafe_allow_html=True)
 
 # ── 오른쪽: 챗봇 ──
 with col_right:
+    chat_desc = "계산기 도구 대기 중" if is_calc else f"KCIM 모성보호 전문 AI · {step['short']} 단계 대기 중"
     st.markdown(f"""
     <div class="chat-header">
       <div class="chat-avatar">🎓</div>
       <div class="chat-header-text">
         <div class="chat-name">육아지원박사</div>
-        <div class="chat-desc">KCIM 모성보호 전문 AI · {step['short']} 단계 대기 중</div>
+        <div class="chat-desc">{chat_desc}</div>
       </div>
     </div>""", unsafe_allow_html=True)
 
@@ -713,7 +850,6 @@ with col_right:
               안녕하세요! 저는 KCIM의 육아지원 전문 AI <strong>박사</strong>입니다.<br><br>
               현재 <strong>[{step['short']}]</strong> 단계에 대한 법령 해석, 대응 방법, 엣지케이스 등 무엇이든 질문하세요. 📚
             </div>""", unsafe_allow_html=True)
-
         for msg in st.session_state.messages:
             with st.chat_message(msg["role"]):
                 st.markdown(msg["content"])
